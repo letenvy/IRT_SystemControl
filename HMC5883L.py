@@ -60,13 +60,16 @@ class HMC5883L:
         x = self.__convert(data, 3)
         y = self.__convert(data, 7)
         z = self.__convert(data, 5)
-        print(f'{x} {y} {z}')
+        # print(f'{x} {y} {z}')
         # print(y)
         # print(z)
         return (x, y, z)
 
     def heading(self):
         (x, y, z) = self.read_data()
+        x=0.986206896551724*x-(-2494.72)
+        y=0.910828025477707*y-(1127.68)
+
         headingRad = math.atan2(y, x)
         headingRad += self.__declination
 
@@ -100,5 +103,5 @@ if __name__ == "__main__":
     # http://magnetic-declination.com/Great%20Britain%20(UK)/Harrogate#
     compass = HMC5883L(gauss=4.7, declination=(7, 22))
     while True:
-        compass.heading()
+        print(compass.heading())
         time.sleep(0.05)

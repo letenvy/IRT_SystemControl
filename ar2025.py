@@ -24,8 +24,16 @@ if __name__ == "__main__":
                                                         RIGHT_PIN2)
     try:
         
-        thisDifferentionalDriveRobot.turn_right(10,100,duration=5)
-        thisDifferentionalDriveRobot.turn_left(100,10,duration=5)
+        thisDifferentionalDriveRobot.turn_right(10,100,duration=2)
+        thisDifferentionalDriveRobot.turn_left(100,10,duration=2)
+        thisDifferentionalDriveRobot.turn_right(10,100,duration=2)
+        thisDifferentionalDriveRobot.turn_left(100,10,duration=2)
+        thisDifferentionalDriveRobot.turn_right(10,100,duration=2)
+        thisDifferentionalDriveRobot.turn_left(100,10,duration=2)
+        thisDifferentionalDriveRobot.turn_right(10,100,duration=2)
+        thisDifferentionalDriveRobot.turn_left(100,10,duration=2)
+        thisDifferentionalDriveRobot.turn_right(10,100,duration=2)
+        thisDifferentionalDriveRobot.turn_left(100,10,duration=2)
         """"
         print("1")
         thisDifferentionalDriveRobot.forward(speed=50,duration=5)
