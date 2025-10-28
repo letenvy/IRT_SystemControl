@@ -1,0 +1,94 @@
+# control_algorithm.py
+
+import time
+import math
+from queue import Empty
+
+def control_algorithm_thread(data_queue, robot, stop_event, 
+                             linear_speed=60, angular_speed=50, stop_radius=50.0):
+    """
+    Поток управления роботом на основе данных из очереди.
+    
+    Параметры:
+        data_queue: queue.Queue — входные данные от UWB, MAG, HMI
+        robot: DifferentialDriveRobot — объект управления моторами
+        stop_event: threading.Event — сигнал завершения
+        linear_speed, angular_speed, stop_radius — параметры управления
+    """
+    current_pos = (0.0, 0.0)
+    current_heading = 0.0
+    target_pos = None
+    running = False
+
+    print("[CONTROL] Поток управления запущен")
+
+    while not stop_event.is_set():
+        # Обработка всех новых сообщений из очереди
+        while not data_queue.empty():
+            try:
+                msg = data_queue.get_nowait()
+                msg_type = msg['type']
+                value = msg['value']
+
+                if msg_type == 'position':
+                    current_pos = value
+                elif msg_type == 'heading':
+                    current_heading = value
+                elif msg_type == 'target':
+                    target_pos = value
+                    print(f"[CONTROL] Новая цель: {target_pos}")
+                elif msg_type == 'command':
+                    if value == 'start':
+                        if target_pos is not None:
+                            running = True
+                            print("[CONTROL] Команда: СТАРТ")
+                        else:
+                            print("[CONTROL] Нельзя стартовать без цели!")
+                    elif value == 'stop':
+                        running = False
+                        robot.stop()
+                        print("[CONTROL] Команда: СТОП")
+
+            except Empty:
+                break
+
+        # Логика движения
+        if running and target_pos is not None:
+            x, y = current_pos
+            tx, ty = target_pos
+            dx = tx - x
+            dy = ty - y
+            distance = math.hypot(dx, dy)
+
+            if distance < stop_radius:
+                robot.stop()
+                print(f"[CONTROL] 🎯 Цель достигнута! Расстояние: {distance:.1f}")
+                running = False  # автоматическая остановка
+                continue
+
+            # Желаемый угол к цели
+            target_angle_deg = math.degrees(math.atan2(dy, dx)) % 360
+            current_heading_norm = current_heading % 360
+            angle_diff = target_angle_deg - current_heading_norm
+
+            # Нормализация к [-180, +180]
+            if angle_diff > 180:
+                angle_diff -= 360
+            elif angle_diff < -180:
+                angle_diff += 360
+
+            angle_threshold = 10.0
+
+            # Управление
+            if abs(angle_diff) > angle_threshold:
+                if angle_diff > 0:
+                    robot.set_speed(-angular_speed, angular_speed)  # поворот влево
+                else:
+                    robot.set_speed(angular_speed, -angular_speed)  # поворот вправо
+            else:
+                robot.set_speed(linear_speed, linear_speed)  # движение вперёд
+
+        time.sleep(0.05)  # ~20 Гц
+
+    robot.stop()
+    print("[CONTROL] Поток управления завершён")
