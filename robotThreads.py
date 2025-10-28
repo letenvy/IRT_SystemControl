@@ -41,9 +41,7 @@ def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
     ser = None
     try:
         ser = serial.Serial(port=port, baudrate=baudrate, timeout=1)
-        ser.write(b'\r\r')
-        ser.readline()
-        ser.write(b'les\n')
+
         print("[UWB] Подключение установлено")
         last_valid_time = time.time()
 
@@ -56,7 +54,8 @@ def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
                         x, y = float(match.group(1)), float(match.group(2))
                         data_queue.put({'type': 'position', 'value': (x, y)})
                         last_valid_time = time.time()
-                        print(f"[UWB] X={x:.1f}, Y={y:.1f}")
+                        return x, y
+                        #print(f"[UWB] X={x:.1f}, Y={y:.1f}")
             if time.time() - last_valid_time > max_no_data_time:
                 print("[UWB] Переподключение...")
                 ser.close()

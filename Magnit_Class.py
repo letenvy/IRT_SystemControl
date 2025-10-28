@@ -83,8 +83,8 @@ class HMC5883L:
 
         # Convert to degrees from radians
         headingDeg = headingRad * 180 / math.pi
-        #return headingDeg
-        print(headingDeg)
+        return headingDeg
+        #print(headingDeg)
         time.sleep(0.05)
 
     def degrees(self, headingDeg):
