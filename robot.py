@@ -48,14 +48,14 @@ class DifferentialDriveRobot:
         self.stop()
         print("[Robot] Инициализация завершена.")
 
-    def _set_motor_direction(self, side, direction):
+    def __set_motor_direction(self, side, direction):
         """
         Устанавливает направление вращения для указанной стороны.
         
         side: 'left' или 'right'
         direction: 'forward', 'backward', 'stop'
         """
-        print(f"[Debug] Установка направления: {side} -> {direction}")
+        #print(f"[Debug] Установка направления: {side} -> {direction}")
         if side == 'left':
             pin1, pin2 = self.left_pin1, self.left_pin2
         elif side == 'right':
@@ -80,27 +80,27 @@ class DifferentialDriveRobot:
         Устанавливает скорость левого и правого моторов.
         Диапазон: -100 (макс. назад) до +100 (макс. вперёд).
         """
-        print(f"[Robot] Установка скорости: левый={left_speed}, правый={right_speed}")
+        #print(f"[Robot] Установка скорости: левый={left_speed}, правый={right_speed}")
 
         # Левый мотор
         if left_speed >= 0:
-            self._set_motor_direction('left', 'forward')
+            self.__set_motor_direction('left', 'forward')
             duty = min(100, left_speed)
         else:
-            self._set_motor_direction('left', 'backward')
+            self.__set_motor_direction('left', 'backward')
             duty = min(100, -left_speed)
         self.pwm_left.ChangeDutyCycle(duty)
-        print(f"[Debug] Левый мотор: скважность = {duty}%")
+        #print(f"[Debug] Левый мотор: скважность = {duty}%")
 
         # Правый мотор
         if right_speed >= 0:
-            self._set_motor_direction('right', 'forward')
+            self.__set_motor_direction('right', 'forward')
             duty = min(100, right_speed)
         else:
-            self._set_motor_direction('right', 'backward')
+            self.__set_motor_direction('right', 'backward')
             duty = min(100, -right_speed)
         self.pwm_right.ChangeDutyCycle(duty)
-        print(f"[Debug] Правый мотор: скважность = {duty}%")
+        #print(f"[Debug] Правый мотор: скважность = {duty}%")
 
     def stop(self):
         """Полная остановка всех моторов."""

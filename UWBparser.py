@@ -10,9 +10,7 @@ def read_sensor_data(port='/dev/ttyACM0', baudrate=115200, reconnect_interval=5,
     ser.port = port
     ser.open()
     ser.timeout = 1
-    ser.write(b'\r\r')
-    data = ser.readline()
-    ser.write(b'les\n')
+
     while True:
         try:
             print("Подключение к UWB датчику установлено")
