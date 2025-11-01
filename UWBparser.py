@@ -47,7 +47,7 @@ def read_sensor_data(port='/dev/ttyACM0', baudrate=115200, reconnect_interval=5,
                     ser.close()
                     ser.open()
                     break
-                time.sleep(0.1)
+                time.sleep(0.01)
                 
         except (serial.SerialException, OSError) as e:
             print(f"Ошибка соединения с датчиком: {e}")

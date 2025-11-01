@@ -115,23 +115,23 @@ def control_algorithm_thread(data_queue, robot, stop_event,
                 continue
 
             # Желаемый угол к цели
-            target_angle_deg = math.degrees(math.atan2(dy, dx)) % 360
-            current_heading_norm = (current_heading - 233) % 360 # ДОБАВИЛИ -233 ГРАДУСОВ !!!!!
-            angle_diff = target_angle_deg - current_heading_norm
+            target_angle_deg = (math.degrees(math.atan2(dx, dy)) + 360) % 360
+            delta = target_angle_deg - current_heading
+            delta = (delta + 180) % 360 - 180
             #print('наша позиция', current_pos)
-            #print(f"угол = {angle_diff:.2f}, таргет = {target_angle_deg:.2f}, текущий = {current_heading_norm:.2f} current_heading = {current_heading:.2f}")
 
             # Нормализация к [-180, +180]
-            if angle_diff > 180:
-                angle_diff -= 360
-            elif angle_diff < -180:
-                angle_diff += 360
+            # if delta > 180:
+            #     delta -= 360
+            # elif delta < -180:
+            #     delta += 360
 
-            angle_threshold = 10.0
+            angle_threshold = 20.0
+            print(f"угол = {delta:.2f}, таргет = {target_angle_deg:.2f}, текущий = current_heading = {current_heading:.2f}")
 
             # Управление
-            # if abs(angle_diff) > angle_threshold:
-            #     if angle_diff > 0:
+            # if abs(delta) > angle_threshold:
+            #     if delta > 0:
             #         robot.set_speed(-angular_speed, angular_speed)  # поворот влево
             #     else:
             #         robot.set_speed(angular_speed, -angular_speed)  # поворот вправо

@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
 import time
+import math
 
 class DifferentialDriveRobot:
     """
@@ -160,6 +161,60 @@ class DifferentialDriveRobot:
             time.sleep(duration)
             self.stop()
 
+    def go_to_point(self, current_x, current_y, target_x, target_y,
+                    current_heading_deg, linear_speed=60, Kp=1.0,
+                    stop_radius=0.1, max_angular_speed=70):
+        """
+        Движение к точке с поддержкой танкового разворота при больших углах ошибки.
+        Все позиции — в метрах. Углы — в градусах (азимут: 0° = север, + по часовой).
+        """
+        dx = target_x - current_x
+        dy = target_y - current_y
+        distance = math.hypot(dx, dy)
+
+        if distance <= stop_radius:
+            self.stop()
+            return True
+
+        # === Перевод цели в азимут от севера (как у магнитометра) ===
+        # atan2(dy, dx) → угол от востока против ЧС
+        # Нам нужно: 0° = север, + по ЧС → формула:
+        target_angle_deg = (90.0 - math.degrees(math.atan2(dy, dx))) % 360.0
+
+        # === Нормализация разницы углов к [-180, +180] ===
+        angle_diff = target_angle_deg - (current_heading_deg % 360.0)
+        while angle_diff > 180:
+            angle_diff -= 360
+        while angle_diff < -180:
+            angle_diff += 360
+        print(f"[DEBUG] tgt=({target_x:.2f},{target_y:.2f}) pos=({current_x:.2f},{current_y:.2f}) "f"hdg={current_heading_deg:6.1f}° tgt_ang={target_angle_deg:6.1f}° diff={angle_diff:6.1f}°")
+        # === Порог для танкового разворота (градусы) ===
+        TURN_THRESHOLD =30.0  # можно настроить
+        DEADBAND = 3.0  # ±3° — не корректируем
+
+        if abs(angle_diff) < DEADBAND:
+            # Угол выровнен — можно ехать прямо
+            self.set_speed(linear_speed, linear_speed)
+            return False
+
+        if abs(angle_diff) > TURN_THRESHOLD:
+            # ТАНКОВЫЙ РАЗВОРОТ
+            direction = 1 if angle_diff > 0 else -1
+            left_speed = -max_angular_speed * direction
+            right_speed = max_angular_speed * direction
+            self.set_speed(left_speed, right_speed)
+        else:
+            # МЯГКАЯ КОРРЕКЦИЯ (с уменьшенным Kp)
+            correction = Kp * angle_diff
+            left_speed = linear_speed - correction
+            right_speed = linear_speed + correction
+            left_speed = max(-100, min(100, left_speed))
+            right_speed = max(-100, min(100, right_speed))
+            self.set_speed(left_speed, right_speed)
+
+        return False
+
+
     def cleanup(self):
         """Очистка ресурсов: остановка ШИМ и сброс GPIO."""
         print("[Robot] Очистка GPIO и остановка ШИМ...")
@@ -169,10 +224,14 @@ class DifferentialDriveRobot:
         GPIO.cleanup()
         print("[Robot] Очистка завершена.")
 
+    
+
     def __del__(self):
         """Автоматическая очистка при удалении объекта."""
-        print("[Robot] Деструктор вызван. Выполняется cleanup...")
         try:
-            self.cleanup()
+            # Проверяем, существует ли атрибут pwm_left (не был ли уже удалён)
+            if hasattr(self, 'pwm_left'):
+                self.cleanup()
         except Exception as e:
-            print(f"[Warning] Ошибка при автоматической очистке: {e}")
+            # Подавляем ошибки, если GPIO уже сброшен
+            pass

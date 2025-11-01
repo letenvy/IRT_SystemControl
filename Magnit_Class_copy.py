@@ -40,7 +40,7 @@ class HMC5883L:
         self._cal_scale_y = 1.0
         self._cal_scale_z = 1.0
         self._calib_file = calib_file
-        self._load_calibration(self._calib_file)  # Попытка загрузить калибровку при старте
+        #self._load_calibration(self._calib_file)  # Попытка загрузить калибровку при старте
 
         
         self.__driveRobot = controlRobot
@@ -63,7 +63,7 @@ class HMC5883L:
         mx_values = []
         my_values = []
         mz_values = []
-        #self.__driveRobot.set_speed(-30, 30) #жоска крутится
+        self.__driveRobot.set_speed(-30, 30) #жоска крутится
         duration = time.time() + 30 #время записи значений для калибровки
         while time.time() < duration:
             x, y, z = self.read_data()
@@ -74,13 +74,13 @@ class HMC5883L:
             time.sleep(0.05)
 
         """Сохраняет массив кала в TXT-файл."""
-        try:
-            with open("govniche.txt", 'w', encoding='utf-8') as f:
-                for val1, val2, val3 in zip(mx_values, my_values, mz_values):
-                    f.write(f"{val1},{val2},{val3}\n")
-            print("массив кала сохранен в файл: govniche.txt")
-        except Exception as e:
-            print(f"[Ошибка] Не удалось сохранить кал")
+        # try:
+        #     with open("govniche.txt", 'w', encoding='utf-8') as f:
+        #         for val1, val2, val3 in zip(mx_values, my_values, mz_values):
+        #             f.write(f"{val1},{val2},{val3}\n")
+        #     print("массив кала сохранен в файл: govniche.txt")
+        # except Exception as e:
+        #     print(f"[Ошибка] Не удалось сохранить кал")
 
         # === Min-Max калибровка (только X и Y) === жоские формулы
         min_x, max_x = min(mx_values), max(mx_values)
@@ -204,24 +204,22 @@ class HMC5883L:
         headingRad1 = math.atan2(y, x)
         # x = self._cal_scale_x * (x - self._cal_bias_x) #HARDCODE PEPEDGE
         # y = self._cal_scale_y * (y - self._cal_bias_y)
-        z = self._cal_scale_z * (z - self._cal_bias_z)
 
-        # print("self._cal_scale_x = ", self._cal_scale_x)
-        # print("self._cal_scale_y = ", self._cal_scale_y)
-        # print("self._cal_bias_x = ", self._cal_bias_x)
-        # print("self._cal_bias_y = ", self._cal_bias_y)
-        kx = 1.31684981684982
-        ky = 0.806053811659193
-        bx = -2517.76000000000
-        by = 962.560000000000
+        kx = 0.7218
+        ky = 0.6761
+        bx = -132.68
+        by = -78.3        # kx = 1.0
+        # ky = 0.9
+        # bx = -60.0
+        # by = -90.0
         x = kx * (x - bx) #HARDCODE PEPEDGE
         y = ky * (y - by)
 
         headingRad = math.atan2(y, x)
-        #print(headingRad * 180 / math.pi, headingRad1 * 180 / math.pi)
         headingRad += self.__declination
         #print('РАДИАНЫ', headingRad)
-
+        headingDeg = (math.degrees(headingRad) - 275) % 360
+        '''
         # Correct for reversed heading
         if headingRad < 0:
             headingRad += 2 * math.pi
@@ -230,14 +228,16 @@ class HMC5883L:
         elif headingRad > 2 * math.pi:
             headingRad -= 2 * math.pi
 
-        if headingRad > self.MaxRad:
-            self.MaxRad = headingRad
-        if headingRad < self.MinRad:
-            self.MinRad = headingRad
-
-        #print('Max', self.MaxRad, 'Min', self.MinRad) 
         # Convert to degrees from radians
-        headingDeg = headingRad * 180 / math.pi
+        headingDeg = headingRad * 180 / math.pi - 275
+
+        if headingDeg < 0:
+            headingDeg += 360
+
+        # Check for wrap and compensate
+        elif headingDeg > 360:
+            headingDeg -= 360'''
+
         return headingDeg #- 52.612433
         #print(headingDeg)
         time.sleep(0.05)
@@ -260,5 +260,5 @@ class HMC5883L:
 #     # http://magnetic-declination.com/Great%20Britain%20(UK)/Harrogate#
 #     compass = HMC5883L(gauss=4.7, declination=(7, 22))
 #     while True:
-#         print(compass.heading())
+#         compass.heading()
 #         time.sleep(0.05)
