@@ -105,7 +105,7 @@ class DifferentialDriveRobot:
 
     def stop(self):
         """Полная остановка всех моторов."""
-        print("[Robot] Остановка всех моторов.")
+        #print("[Robot] Остановка всех моторов.")
         self.set_speed(0, 0)
 
 

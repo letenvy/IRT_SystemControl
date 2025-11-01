@@ -4,6 +4,94 @@ import time
 import math
 from queue import Empty
 from Magnit_Class import HMC5883L
+
+def average_uwb_position(curent_position, duration_sec=5.0, interval=0.1):
+    """Собирает UWB-позиции в течение duration_sec и возвращает усреднённую."""
+    positions = []
+    start = time.time()
+    while time.time() - start < duration_sec:
+        try:
+            pos = curent_position  # ДОЛЖНА ВОЗВРАЩАТЬ (x, y)
+            if pos is not None:
+                positions.append(pos)
+        except Exception as e:
+            print(f"[UWB] Ошибка: {e}")
+        time.sleep(interval)
+
+    if not positions:
+        raise RuntimeError("Не удалось получить UWB-данные")
+
+    avg_x = sum(p[0] for p in positions) / len(positions)
+    avg_y = sum(p[1] for p in positions) / len(positions)
+    return (avg_x, avg_y)
+
+
+def calibrate_heading_and_return(robot, curent_position, forward_speed=20, forward_time=2.0):
+    """
+    Калибрует направление робота по UWB и возвращает его на исходную точку.
+    
+    Параметры:
+        robot — объект с методами set_speed(l, r) и stop()
+        forward_speed — скорость в условных единицах (например, 20 из 100)
+        forward_time — сколько секунд ехать вперёд
+    """
+    print("[CALIB] Шаг 1: Сбор начальной позиции (5 сек)...")
+    start_pos = average_uwb_position(duration_sec=5.0)
+    print(f"[CALIB] Начальная позиция: ({start_pos[0]:.3f}, {start_pos[1]:.3f})")
+
+    # Едем вперёд
+    print(f"[CALIB] Шаг 2: Едем вперёд {forward_time} сек со скоростью {forward_speed}...")
+    robot.set_speed(forward_speed, forward_speed)
+    time.sleep(forward_time)
+    robot.stop()
+
+    # Ждём, пока робот остановится и UWB стабилизируется
+    time.sleep(0.5)
+
+    print("[CALIB] Шаг 3: Сбор конечной позиции (5 сек)...")
+    end_pos = average_uwb_position(duration_sec=5.0)
+    print(f"[CALIB] Конечная позиция: ({end_pos[0]:.3f}, {end_pos[1]:.3f})")
+
+    # Вычисляем вектор движения
+    dx = end_pos[0] - start_pos[0]
+    dy = end_pos[1] - start_pos[1]
+    distance_moved = math.hypot(dx, dy)
+
+    if distance_moved < 0.1:
+        raise RuntimeError("Робот почти не переместился — проверьте UWB и движение!")
+
+    print(f"[CALIB] Пройдено: {distance_moved:.3f} м")
+
+    # Вычисляем угол движения в глобальной системе (математический, от +X против ЧС)
+    movement_angle_rad = math.atan2(dy, dx)
+    movement_angle_deg = math.degrees(movement_angle_rad) % 360
+    print(f"[CALIB] Направление движения: {movement_angle_deg:.1f}° (от +X против ЧС)")
+
+    # === Возврат назад ===
+    print("[CALIB] Шаг 4: Возвращаемся назад на исходную позицию...")
+    # Едем задом с той же скоростью
+    robot.set_speed(-forward_speed, -forward_speed)
+    time.sleep(forward_time + 0.2)  # чуть дольше на всякий случай
+    robot.stop()
+
+    # Финальная проверка
+    print("[CALIB] Шаг 5: Проверка финальной позиции...")
+    final_pos = average_uwb_position(duration_sec=3.0)
+    final_dist = math.hypot(final_pos[0] - start_pos[0], final_pos[1] - start_pos[1])
+    print(f"[CALIB] Отклонение от старта: {final_dist:.3f} м")
+
+    if final_dist > 0.15:
+        print("[WARN] Робот не вернулся точно — возможно, проскальзывание или неточность UWB")
+    else:
+        print("[CALIB] ✅ Калибровка завершена успешно!")
+
+    return {
+        "start": start_pos,
+        "end": end_pos,
+        "movement_angle_deg": movement_angle_deg,
+        "distance_moved": distance_moved,
+        "final_error": final_dist
+    }
 def control_algorithm_thread(data_queue, robot, stop_event, 
                              linear_speed=60, angular_speed=50, stop_radius=50.0):
     """
@@ -49,55 +137,16 @@ def control_algorithm_thread(data_queue, robot, stop_event,
                         running = False
                         robot.stop()
                         print("[CONTROL] Команда: СТОП")
-                    elif value == 'calibrate':
-                        calibrate = True
+                    elif value == 'calibrate1':
+                        calibrate1 = True
 
             except Empty:
                 break
 
 
-        # Калибровка
-        #if calibrate:
-            # mx_values = []
-            # my_values = []
-            # robot.set_speed(-angular_speed, angular_speed) #жоска крутится
-            # duration = time.time() + 10 #время записи значений для калибровки
-            # while time.time() < duration:
-            #     x, y, _ = compas.read_data()
-            #     mx_values.append(x)
-            #     my_values.append(y)
-            #     time.sleep(0.05)
 
-            # # === Min-Max калибровка (только X и Y) === жоские формулы
-            # min_x, max_x = min(mx_values), max(mx_values)
-            # min_y, max_y = min(my_values), max(my_values)
-
-            # bias_x = (max_x + min_x) / 2.0 #смещение
-            # bias_y = (max_y + min_y) / 2.0
-
-            # range_x = max_x - min_x
-            # range_y = max_y - min_y
-
-            # if range_x == 0 or range_y == 0:
-            #     raise ValueError("[Калибровка] Диапазон измерений нулевой — Лохи, проверьте подключение магнитометра!")
-
-            # # Средний радиус (по полуразмахам)
-            # avg_radius = (range_x + range_y) / 4.0
-
-            # scale_x = avg_radius / (range_x / 2.0)
-            # scale_y = avg_radius / (range_y / 2.0)
-
-            # calibrate = False
-            # compas.set_calibration(bias_x, bias_y, scale_x, scale_y)
-            # compas.save_calibration()
-            # robot.stop()
-            # print("\n=== Результаты калибровки ===")
-            # print(f"Смещение (bias):  X = {bias_x:.2f}, Y = {bias_y:.2f}")
-            # print(f"Масштаб (scale): X = {scale_x:.4f}, Y = {scale_y:.4f}")
-            # print(f"Собрано точек: {len(mx_values)} за {CALIBRATION_DURATION} сек")
-            # print("============================\n")
-
-
+        if calibrate1:
+            calibrate_heading_and_return(robot, current_pos)
 
         # Логика движения
         if running and target_pos is not None:
@@ -139,6 +188,9 @@ def control_algorithm_thread(data_queue, robot, stop_event,
             #     robot.set_speed(linear_speed, linear_speed)  # движение вперёд
 
         time.sleep(0.05)  # ~20 Гц
+
+
+
 
     robot.stop()
     print("[CONTROL] Поток управления завершён")

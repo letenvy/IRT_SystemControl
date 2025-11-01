@@ -20,7 +20,8 @@ import re
 from UWBparser import read_sensor_data  # если вы его не меняли — лучше не использовать напрямую
 from Magnit_Class_copy import HMC5883L
 from robot import DifferentialDriveRobot
-from ControlAlgorithmRobot import control_algorithm_thread  # ← импорт нового модуля
+#from ControlAlgorithmRobot import control_algorithm_thread  # ← импорт нового модуля
+from CalibControlAlg import control_algorithm_thread  # ← импорт нового модуля
 
 # === Настройки GPIO (замените на ваши!) ===
 ROBOT_PINS = {
@@ -108,6 +109,8 @@ def hmi_thread():
             elif cmd[0] == 'calibrate':
                 compas.calibrate()
                 # data_queue.put({'type': 'command', 'value': 'calibrate'})
+            elif cmd[0] == 'calibrate1':
+                 data_queue.put({'type': 'command', 'value': 'calibrate1'})
             else:
                 print("[HMI] Неверная команда")
         except (EOFError, KeyboardInterrupt):
