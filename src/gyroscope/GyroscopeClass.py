@@ -109,18 +109,29 @@ class GyroscopeClass:
         self.bias_y = sy / samples
         self.bias_z = sz / samples
 
-    def read_corrected(self):
-        x, y, z = self.read_once()
-        return x - self.bias_x, y - self.bias_y, z - self.bias_z
+    def read_corrected(self,deadband=0.05):
+        wx, wy, wz = self.read_once()
 
-    def get_angles(self, dt=None,reset=False):
+        if hasattr(self, 'bias_x'):
+            wx -= self.bias_x
+            wy -= self.bias_y
+            wz -= self.bias_z
 
+        if abs(wx) < deadband:
+            wx = 0.0
+        if abs(wy) < deadband:
+            wy = 0.0
+        if abs(wz) < deadband:
+            wz = 0.0
+
+        return wx, wy, wz
+
+    def get_angles(self, dt=None,reset=False,deadband=0.05):
         current_time=time.time()
 
-        if not hasattr(self, '_angle_x'):
+        if reset or not hasattr(self, '_angle_x'):
             self._angle_x = self._angle_y = self._angle_z = 0.0
             self._last_time = current_time
-
             self.read_once()
             return (0.0, 0.0, 0.0)
     
@@ -131,14 +142,14 @@ class GyroscopeClass:
         if dt <= 0:
             return (self._angle_x, self._angle_y, self._angle_z)
 
-        wx, wy, wz = self.read_once()
+        wx, wy, wz = self.read_corrected(deadband=deadband)
         self._angle_x += wx * dt
         self._angle_y += wy * dt
         self._angle_z += wz * dt
 
         return (self._angle_x, self._angle_y, self._angle_z)
 
-    def calibrate_and_save(self,filename="gyro_bias.json",samples=200,delay=0.01):
+    def calibrate_and_save(self,filename="gyro_bias.json",samples=1000,delay=0.01):
         print(f"Калибровка гироскопа ({samples} измерений). Убедитесь, что устройство НЕПОДВИЖНО!")
         time.sleep(1)
 
@@ -171,12 +182,27 @@ class GyroscopeClass:
         print(f"X: {bias_x:.3f}, Y: {bias_y:.3f}, Z: {bias_z:.3f} град/с")
         return bias_x,bias_y,bias_z
 
+    def load_bias_from_file(self, filename="gyro_bias.json"):
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            self.bias_x = data["bias_x"]
+            self.bias_y = data["bias_y"]
+            self.bias_z = data["bias_z"]
+            print(f"Загружен bias из {filename}")
+            print(f"X: {self.bias_x:.3f}, Y: {self.bias_y:.3f}, Z: {self.bias_z:.3f} град/с")
+            return True
+        except FileNotFoundError:
+            print(f"Файл {filename} не найден. Выполните калибровку.")
+            return False
+        except KeyError as e:
+            print(f"Неверный формат файла: отсутствует {e}")
+            return False
 
-
-    def track_angles(self,log_to_file=False,filename="gyro_angles_log.csv"):
+    def track_angles(self,log_to_file=False,filename="gyro_angles_log.csv",deadband=0.05):
         print("Отслеживание углов по гироскопу. Нажмите Enter для остановки...")
 
-        self.get_angles(reset=True)
+        self.get_angles(reset=True,deadband=deadband)
         log_file = None
         csv_writer = None
         if log_to_file:
@@ -200,15 +226,12 @@ class GyroscopeClass:
 
         try:
             while not self.stop_flag:
-                # Получаем углы — интеграция внутри get_angles
-                angle_x, angle_y, angle_z = self.get_angles()  # dt измеряется автоматически
+                angle_x, angle_y, angle_z = self.get_angles(deadband=deadband)
                 ts = time.time()
 
-                # Логирование
                 if log_to_file:
                     csv_writer.writerow([ts, angle_x, angle_y, angle_z])
 
-                # Подсчёт частоты вывода (не обновления!)
                 now = time.time()
                 dt_print = now - last_print_time
                 if dt_print > 0:
@@ -220,7 +243,6 @@ class GyroscopeClass:
                         interval_count = 0
                     last_print_time = now
 
-                # Вывод одной строкой
                 print(f"\rX={angle_x:8.2f}°, Y={angle_y:8.2f}°, Z={angle_z:8.2f}° | Hz: {hz:4.1f}", end='', flush=True)
 
                 time.sleep(0.005)
