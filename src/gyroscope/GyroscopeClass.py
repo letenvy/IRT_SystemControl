@@ -73,7 +73,7 @@ class GyroscopeClass:
         try:
             while not self.stop_flag:
                 start = time.time()
-                x, y, z = self.read_once()
+                x, y, z = self.read_corrected(deadband=0.5)
                 ts = time.time()
 
                 dt = start - last_time
@@ -109,7 +109,7 @@ class GyroscopeClass:
         self.bias_y = sy / samples
         self.bias_z = sz / samples
 
-    def read_corrected(self,deadband=0.05):
+    def read_corrected(self,deadband=0.5):
         wx, wy, wz = self.read_once()
 
         if hasattr(self, 'bias_x'):
@@ -126,7 +126,7 @@ class GyroscopeClass:
 
         return wx, wy, wz
 
-    def get_angles(self, dt=None,reset=False,deadband=0.05):
+    def get_angles(self, dt=None,reset=False,deadband=0.5):
         current_time=time.time()
 
         if reset or not hasattr(self, '_angle_x'):
@@ -199,7 +199,7 @@ class GyroscopeClass:
             print(f"Неверный формат файла: отсутствует {e}")
             return False
 
-    def track_angles(self,log_to_file=False,filename="gyro_angles_log.csv",deadband=0.05):
+    def track_angles(self,log_to_file=False,filename="gyro_angles_log.csv",deadband=0.5):
         print("Отслеживание углов по гироскопу. Нажмите Enter для остановки...")
 
         self.get_angles(reset=True,deadband=deadband)

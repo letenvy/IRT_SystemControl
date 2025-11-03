@@ -1,3 +1,4 @@
 .vscode
 log
 src/gyroscope/__pycache__
+.gyro_log.csv
