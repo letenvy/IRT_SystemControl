@@ -1,15 +1,4 @@
-'''
-Script consists of 3 threads:
-1 - HMI: Set target-point (x,y)
-2 - Read data from UWB
-3 - Read data from MAGNITOMETER
-4 - Control algorithm
-
-Queue of string:
-Input: 1, 2, 3 threads
-Output: 4 thread
-
-'''
+# robotThreads.py
 
 import threading
 import time
@@ -17,13 +6,12 @@ import queue
 import serial
 import re
 
-from UWBparser import read_sensor_data  # если вы его не меняли — лучше не использовать напрямую
-from Magnit_Class_copy import HMC5883L
+from UWBparser import read_sensor_data
+from GyroscopeClass import GyroscopeClass  # ← ваш класс
 from robot import DifferentialDriveRobot
-#from ControlAlgorithmRobot import control_algorithm_thread  # ← импорт нового модуля
-from CalibControlAlg import control_algorithm_thread  # ← импорт нового модуля
+from ControlAlgorithmRobot import control_algorithm_thread
 
-# === Настройки GPIO (замените на ваши!) ===
+# === GPIO ===
 ROBOT_PINS = {
     'left_enable': 13,
     'left_pin1': 19,
@@ -33,18 +21,15 @@ ROBOT_PINS = {
     'right_pin2': 26,
 }
 
-# === Глобальные объекты ===
 data_queue = queue.Queue()
 stop_event = threading.Event()
 
-# === Поток UWB (встроенный, без внешней зависимости) ===
+# === UWB поток ===
 def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
     ser = None
     try:
-        
         ser = serial.Serial(port=port, baudrate=baudrate, timeout=1)
-
-        print("[UWB] Подключение установлено")
+        print("[UWB] Подключено")
         last_valid_time = time.time()
 
         while not stop_event.is_set():
@@ -54,43 +39,51 @@ def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
                     match = re.search(r"\[SOLVE\].*?X:\s*([\d\.\-]+)\s*Y:\s*([\d\.\-]+)", line)
                     if match:
                         x, y = float(match.group(1)), float(match.group(2))
-                        # print(f'X:{x} Y:{y}')
+                        print(f"X:{x}\t Y:{y}")
                         data_queue.put({'type': 'position', 'value': (x, y)})
                         last_valid_time = time.time()
-                        
             if time.time() - last_valid_time > max_no_data_time:
                 print("[UWB] Переподключение...")
                 ser.close()
                 time.sleep(1)
                 ser = serial.Serial(port=port, baudrate=baudrate, timeout=1)
                 last_valid_time = time.time()
-            #time.sleep(0.05)
+            time.sleep(0.01)
     except Exception as e:
         print(f"[UWB] Ошибка: {e}")
     finally:
         if ser and ser.is_open:
             ser.close()
 
-# === Поток магнитометра ===
-def mag_thread(mag_sensor):
+# === Гироскоп поток ===
+def gyro_thread(gyro_sensor):
+    print("[GYRO] Инициализация гироскопа...")
+    # Калибровка (опционально — можно загрузить из файла)
+    try:
+        gyro_sensor.calibrate_and_save("gyro_bias.json", samples=200)
+    except Exception as e:
+        print(f"[GYRO] Ошибка калибровки: {e}")
+
+    print("[GYRO] Гироскоп готов. Начало интеграции угла Z.")
+    gyro_sensor.get_angles(reset=True)  # сброс интегратора
+
     while not stop_event.is_set():
         try:
-            heading = mag_sensor.heading()
-            #print("heading = ", heading)
-            data_queue.put({'type': 'heading', 'value': heading})
-            time.sleep(0.1) #было 0.1!!!!!!!!!
+            angle_x, angle_y, angle_z = gyro_sensor.get_angles()
+            # Z — вертикальная ось (рыскание / yaw)
+            data_queue.put({'type': 'gyro_heading', 'value': angle_z})
+            time.sleep(0.01)  # ~100 Гц
         except Exception as e:
-            print(f"[MAG] Ошибка: {e}")
-            time.sleep(1)
+            print(f"[GYRO] Ошибка: {e}")
+            time.sleep(0.1)
 
-# === Поток HMI ===
+# === HMI ===
 def hmi_thread():
-    print("\n[HMI] Введите команды:")
-    print("  calibrate    — запуск процесса калибровки")
+    print("\n[HMI] Команды:")
     print("  target x y   — задать цель")
     print("  start        — начать движение")
     print("  stop         — остановить")
-    print("  quit         — завершить\n")
+    print("  quit         — выйти\n")
     while not stop_event.is_set():
         try:
             cmd = input().strip().split()
@@ -106,50 +99,44 @@ def hmi_thread():
             elif cmd[0] == 'target' and len(cmd) == 3:
                 x, y = float(cmd[1]), float(cmd[2])
                 data_queue.put({'type': 'target', 'value': (x, y)})
-            elif cmd[0] == 'calibrate':
-                compas.calibrate()
-                # data_queue.put({'type': 'command', 'value': 'calibrate'})
-            elif cmd[0] == 'calibrate1':
-                 data_queue.put({'type': 'command', 'value': 'calibrate1'})
             else:
-                print("[HMI] Неверная команда")
+                print("[HMI] Неизвестная команда")
         except (EOFError, KeyboardInterrupt):
             stop_event.set()
             break
 
 # === MAIN ===
 if __name__ == "__main__":
-    robot = None
+    robot = gyro = None
     try:
-        # Инициализация
-        print(" Инициализация робота...")
+        print("Инициализация робота...")
         robot = DifferentialDriveRobot(**ROBOT_PINS)
 
+        print("Инициализация гироскопа...")
+        gyro = GyroscopeClass(port=1, addr=0x68)
 
-
-        print(" Инициализация магнитометра...")
-        compas = HMC5883L(gauss=8.1, declination=(7, 22), controlRobot = robot)
-
-        # Создание потоков
         threads = [
             threading.Thread(target=uwb_thread, daemon=True),
-            threading.Thread(target=mag_thread, args=(compas,), daemon=True),
+            threading.Thread(target=gyro_thread, args=(gyro,), daemon=True),
             threading.Thread(target=hmi_thread, daemon=True),
             threading.Thread(
                 target=control_algorithm_thread,
                 args=(data_queue, robot, stop_event),
-                kwargs={'linear_speed': 60, 'angular_speed': 30, 'stop_radius': 0.5},
+                kwargs={
+                    'linear_speed': 60,
+                    'angular_speed': 40,
+                    'angle_threshold': 5.0,
+                    'stop_radius': 0.5
+                },
                 daemon=True
             ),
         ]
 
-        # Запуск
         for t in threads:
             t.start()
 
-        print("\n Система запущена!\n")
+        print("\nСистема запущена (UWB + гироскоп)!\n")
 
-        # Ожидание завершения
         while not stop_event.is_set():
             time.sleep(0.5)
 
@@ -161,33 +148,3 @@ if __name__ == "__main__":
         if robot:
             robot.cleanup()
         print("✅ Завершено.")
-
-''' OLD CODE
-import asyncio
-import serial
-import time
-import re
-import queue
-
-from UWBparser import read_sensor_data
-from Magnit_Class import HMC5883L
-from robot import DifferentialDriveRobot
-
-msg_queue = queue.Queue()
-
-async def ControlAlgorithm():
-	pass
-
-
-if __name__ == "__main__":
-	magnitometer = HMC5883L(gauss=4.7, declination=(7, 22))
-	threads = [ threading.Thread(target = read_sensor_data, args = ('/dev/ttyACM0', 115200, reconnect_interval=5, max_no_data_time=5), daemon = true), threading.Thread(target = HMC5883L, args = (4.7, (7, 22)), daemon = true) ]
-	#	threads = [ threading.Thread(target = read_sensor_data(port='/dev/ttyACM0', baudrate=115200, reconnect_interval=5, max_no_data_time=5)), threading.Thread(target = magnitometer.heading) ]
-	for t in threads:
-		t.start()
-		
-	time.sleep(20)
-	
-	for t in threads:
-		t.join()
-'''
