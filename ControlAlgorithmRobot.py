@@ -41,8 +41,6 @@ def control_algorithm_thread(data_queue, robot, stop_event,
         return True
 
     while not stop_event.is_set():
-        with open("log_coords_and_heading.txt", "a") as file:
-            file.write(f"{current_pos[0]} {current_pos[1]} {current_heading}\n")
         # --- Обработка входных данных ---
         while not data_queue.empty():
             try:
@@ -50,10 +48,14 @@ def control_algorithm_thread(data_queue, robot, stop_event,
                 #print("Попали в msg: ", msg)
                 if msg['type'] == 'position':
                     current_pos = msg['value']
+                    with open("log_coords_and_heading.txt", "a") as file:
+                        file.write(f"{current_pos[0]} {current_pos[1]} {current_heading}\n")
                 elif msg['type'] == 'gyro_heading':
                     current_heading = msg['value']  # угол в градусах
                 elif msg['type'] == 'command':
                     if msg['value'] == 'start':
+                        if current_pos[0] is None:
+                            continue
                         if target_pos is None:
                             if not acquire_next_target():
                                 print("[CONTROL] Нет цели для старта!")

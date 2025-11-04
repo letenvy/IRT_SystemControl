@@ -10,6 +10,7 @@ from UWBparser import read_sensor_data
 from GyroscopeClass import GyroscopeClass  # ← ваш класс
 from robot import DifferentialDriveRobot
 from ControlAlgorithmRobot import control_algorithm_thread
+from alpha_blend import AlphaBlendFilter
 
 # === GPIO ===
 ROBOT_PINS = {
@@ -32,17 +33,22 @@ def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
         print("[UWB] Подключено")
         last_valid_time = time.time()
 
+        alpha_filter = None
+
         while not stop_event.is_set():
             if ser.in_waiting:
                 line = ser.readline().decode('ascii', errors='ignore').strip()
                 if len(line) > 10:
-                    match = re.search(r"\[SOLVE\].*?X:\s*([\d\.\-]+)\s*Y:\s*([\d\.\-]+)", line)
+                    #print(line)
+                    match = re.search(r"\[SOLVE\].*?X:\s*([\d\.\-]+)\s*Y:\s*([\d\.\-]+).*?anum:\s*([\d]+)", line)
                     if match:
                         x, y = float(match.group(1)), float(match.group(2))
-                        # with open("log_coords_and_heading.txt", "a") as file:
-                        #     file.write(f"X:{x}\t Y:{y}\n")
-                        # print(f"X:{x}\t Y:{y}")
-                        data_queue.put({'type': 'position', 'value': (x, y)})
+                        anum = int(match.group(3))
+                        if anum == 4:
+                            if alpha_filter is None:
+                                alpha_filter = AlphaBlendFilter(alpha=0.6, x_init=x, y_init=y)
+                            x, y = alpha_filter.update(x, y)
+                            data_queue.put({'type': 'position', 'value': (x, y)})
                         last_valid_time = time.time()
             if time.time() - last_valid_time > max_no_data_time:
                 print("[UWB] Переподключение...")
