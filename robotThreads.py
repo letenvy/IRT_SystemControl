@@ -39,7 +39,9 @@ def uwb_thread(port='/dev/ttyACM0', baudrate=115200, max_no_data_time=5):
                     match = re.search(r"\[SOLVE\].*?X:\s*([\d\.\-]+)\s*Y:\s*([\d\.\-]+)", line)
                     if match:
                         x, y = float(match.group(1)), float(match.group(2))
-                        print(f"X:{x}\t Y:{y}")
+                        # with open("log_coords_and_heading.txt", "a") as file:
+                        #     file.write(f"X:{x}\t Y:{y}\n")
+                        # print(f"X:{x}\t Y:{y}")
                         data_queue.put({'type': 'position', 'value': (x, y)})
                         last_valid_time = time.time()
             if time.time() - last_valid_time > max_no_data_time:
@@ -70,6 +72,8 @@ def gyro_thread(gyro_sensor):
     while not stop_event.is_set():
         try:
             angle_x, angle_y, angle_z = gyro_sensor.get_angles()
+            # with open("log_coords_and_heading.txt", "a") as file:
+            #                 file.write(f"angle_x:{angle_x}\t angle_y:{angle_y} angle_z:{angle_z}\n")
             # Z — вертикальная ось (рыскание / yaw)
             data_queue.put({'type': 'gyro_heading', 'value': angle_z})
             time.sleep(0.01)  # ~100 Гц
@@ -80,7 +84,8 @@ def gyro_thread(gyro_sensor):
 # === HMI ===
 def hmi_thread():
     print("\n[HMI] Команды:")
-    print("  target x y   — задать цель")
+    #print("  target n x0 y0 ... xn yn — задать маршрут из n точек")
+    print("  target filename — задать маршрут из файла")
     print("  start        — начать движение")
     print("  stop         — остановить")
     print("  quit         — выйти\n")
@@ -96,9 +101,47 @@ def hmi_thread():
                 data_queue.put({'type': 'command', 'value': 'stop'})
             elif cmd[0] == 'start':
                 data_queue.put({'type': 'command', 'value': 'start'})
-            elif cmd[0] == 'target' and len(cmd) == 3:
-                x, y = float(cmd[1]), float(cmd[2])
-                data_queue.put({'type': 'target', 'value': (x, y)})
+            elif cmd[0] == 'target':
+                # if len(cmd) < 4:
+                #     print("[HMI] Формат: target n x0 y0 ... xn yn")
+                #     # target 6 6 3 7 3 8 2 7 1 6 1 5 2
+                #     continue
+
+                # try:
+                with open(cmd[1], "r") as file:
+                    waypoints = []
+                    for waypoint in file.readlines():
+                        print(waypoint)
+                        x, y = waypoint.split()
+                        waypoints.append((float(x), float(y)))
+                waypoint_count = len(waypoints)
+                    # waypoint_count = int(cmd[1])
+
+                # except ValueError:
+                #     print("[HMI] n должно быть целым числом")
+                #     continue
+
+                # if waypoint_count <= 0:
+                #     print("[HMI] Количество точек должно быть больше 0")
+                #     continue
+
+                # expected_len = 2 + waypoint_count * 2
+                # if len(cmd) != expected_len:
+                #     print(f"[HMI] Ожидается {expected_len - 2} координат (n={waypoint_count})")
+                #     continue
+
+                # waypoints = []
+                # try:
+                #     for i in range(waypoint_count):
+                #         x = float(cmd[2 + 2 * i])
+                #         y = float(cmd[3 + 2 * i])
+                #         waypoints.append((x, y))
+                # except ValueError:
+                #     print("[HMI] Координаты должны быть числами")
+                #     continue
+
+                data_queue.put({'type': 'targets', 'value': waypoints})
+                print(f"[HMI] Принято {waypoint_count} точек")
             else:
                 print("[HMI] Неизвестная команда")
         except (EOFError, KeyboardInterrupt):
@@ -107,6 +150,10 @@ def hmi_thread():
 
 # === MAIN ===
 if __name__ == "__main__":
+    # Файл логов
+    with open("log_coords_and_heading.txt", "w") as file:
+        file.write("")
+        
     robot = gyro = None
     try:
         print("Инициализация робота...")

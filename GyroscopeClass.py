@@ -112,7 +112,9 @@ class GyroscopeClass:
     def read_corrected(self,deadband=0.5):
         wx, wy, wz = self.read_once()
 
+        #print("Waiting for bias")
         if hasattr(self, 'bias_x'):
+            #print("OK")
             wx -= self.bias_x
             wy -= self.bias_y
             wz -= self.bias_z
@@ -147,6 +149,9 @@ class GyroscopeClass:
         self._angle_y += wy * dt
         self._angle_z += wz * dt
 
+        # with open("log_coords_and_heading.txt", "a") as file:
+        #     file.write(f"wx:{wx}\t wy:{wy} wz:{wz}\n")
+
         return (self._angle_x, self._angle_y, self._angle_z)
 
     def calibrate_and_save(self,filename="gyro_bias.json",samples=1000,delay=0.01):
@@ -157,20 +162,21 @@ class GyroscopeClass:
         for i in range(samples):
             x, y, z = self.read_once()
             sum_x += x
+            #print(f"sum_x: {sum_x}, x: {x}")
             sum_y += y
             sum_z += z
             if i % 20 == 0:
                 print(f"\rПрогресс: {i}/{samples}", end='', flush=True)
             time.sleep(delay)
 
-        bias_x = sum_x / samples
-        bias_y = sum_y / samples
-        bias_z = sum_z / samples
+        self.bias_x = sum_x / samples
+        self.bias_y = sum_y / samples
+        self.bias_z = sum_z / samples
 
         bias_data = {
-            "bias_x": bias_x,
-            "bias_y": bias_y,
-            "bias_z": bias_z,
+            "bias_x": self.bias_x,
+            "bias_y": self.bias_y,
+            "bias_z": self.bias_z,
             "samples": samples,
             "timestamp": time.time()
         }
@@ -179,8 +185,8 @@ class GyroscopeClass:
             json.dump(bias_data, f, indent=2)
         
         print(f"\nКалибровка завершена. Bias сохранён в {filename}")
-        print(f"X: {bias_x:.3f}, Y: {bias_y:.3f}, Z: {bias_z:.3f} град/с")
-        return bias_x,bias_y,bias_z
+        print(f"X: {self.bias_x:.3f}, Y: {self.bias_y:.3f}, Z: {self.bias_z:.3f} град/с")
+        return self.bias_x,self.bias_y,self.bias_z
 
     def load_bias_from_file(self, filename="gyro_bias.json"):
         try:

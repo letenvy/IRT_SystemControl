@@ -1,0 +1,5 @@
+__pycache__
+junk_files
+gyro_bias.json
+*.pyc
+*.txt
