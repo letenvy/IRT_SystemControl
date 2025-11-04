@@ -68,7 +68,11 @@ def gyro_thread(gyro_sensor):
     print("[GYRO] Инициализация гироскопа...")
     # Калибровка (опционально — можно загрузить из файла)
     try:
-        gyro_sensor.calibrate_and_save("gyro_bias.json", samples=200)
+        #gyro_sensor.calibrate_and_save("gyro_bias.json", samples=200)
+        if not gyro_sensor.load_bias_from_file("gyro_bias.json"):
+            print("Calibrate json not found, so new one creating...")
+            gyro_sensor.calibrate_and_save("gyro_bias.json", samples=200)
+            gyro_sensor.load_bias_from_file("gyro_bias.json")
     except Exception as e:
         print(f"[GYRO] Ошибка калибровки: {e}")
 
