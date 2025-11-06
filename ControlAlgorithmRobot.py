@@ -8,6 +8,7 @@ def control_algorithm_thread(data_queue, robot, stop_event,
                              angular_speed=40,
                              angle_threshold=5.0,      # градусов
                              stop_radius=0.5,          # метров или мм — зависит от UWB!
+                             error_compensation = 18,  # компенсация отставания по скорости правой пары колёс
                              waypoint_mode=True):
     """
     Управление роботом по точкам с использованием UWB и гироскопа.
@@ -20,7 +21,7 @@ def control_algorithm_thread(data_queue, robot, stop_event,
       5. Повернуться к цели (по гироскопу)
       6. Двигаться вперёд до достижения цели
     """
-
+    #error_compensation = 18
     current_pos = (0.0, 0.0)
     current_heading = 0.0  # градусы, от гироскопа (Z-ось)
     target_pos = None
@@ -126,9 +127,9 @@ def control_algorithm_thread(data_queue, robot, stop_event,
             else:
                 # Поворот на месте
                 if delta > 0:
-                    robot.set_speed(-angular_speed, angular_speed)  # влево
+                    robot.set_speed(-angular_speed, angular_speed + error_compensation)  # влево
                 else:
-                    robot.set_speed(angular_speed, -angular_speed)  # вправо
+                    robot.set_speed(angular_speed, -angular_speed - error_compensation )  # вправо
 
         elif state == 'MOVING':
             if target_pos is None:
@@ -153,7 +154,8 @@ def control_algorithm_thread(data_queue, robot, stop_event,
                     print("[CONTROL] ✅ Маршрут завершён")
                     state = 'IDLE'
             else:
-                robot.set_speed(linear_speed, linear_speed)
+                robot.set_speed(linear_speed, linear_speed + error_compensation)
+
 
         elif state == 'IDLE':
             robot.stop()

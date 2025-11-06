@@ -1,5 +1,7 @@
 __pycache__
+Andrey_files
 junk_files
-gyro_bias.json
-*.pyc
+*.csv
+*.json
 *.txt
+ar2025.py
